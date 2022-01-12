@@ -1,0 +1,120 @@
+version: "3.8"
+
+services:
+
+  # nginx Service
+  nginx:
+    image: nginx:alpine
+    container_name: "${PROJECT_NAME}_nginx"
+    restart: unless-stopped
+    volumes:
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/:rw
+      - ./laravel:/var/www/html
+    labels:
+      - "traefik.http.routers.${PROJECT_NAME}_nginx.rule=Host(`${PROJECT_BASE_U\
+        RL}`)"
+
+  # php Service
+  # Make new project with 'docker-compose exec php composer create-project laravel/laravel ./'
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # args:
+      #   uid: 1000
+      #   gid: 1000
+    image: "${PROJECT_NAME}_php"
+    container_name: "${PROJECT_NAME}_php"
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./laravel:/var/www/html
+    environment:
+      PHP_SENDMAIL_PATH: /usr/sbin/sendmail -t -i -S mailhog:1025
+
+  # mysql Service
+  mysql:
+    image: mysql:latest
+    container_name: "${PROJECT_NAME}_mysql"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: $DB_ROOT_PASSWORD
+      MYSQL_DATABASE: $DB_NAME
+      MYSQL_USER: $DB_USER
+      MYSQL_PASSWORD: $DB_PASSWORD
+    volumes:
+      - ~/.Sites/${PROJECT_NAME}/mysql:/var/lib/mysql
+
+  # phpmyadmin Service
+  pma:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: "${PROJECT_NAME}_pma"
+    restart: unless-stopped
+    environment:
+      PMA_ARBITRARY: 1
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    depends_on:
+      - mysql
+    labels:
+      - "traefik.http.routers.${PROJECT_NAME}_pma.rule=Host(`pma.${PROJECT_BASE\
+        _URL}`)"
+
+  # adminer Service
+  adminer:
+    image: adminer:latest
+    container_name: "${PROJECT_NAME}_adminer"
+    restart: unless-stopped
+    environment:
+      # For PostgreSQL:
+      ADMINER_DEFAULT_DB_DRIVER: $DB_DRIVER
+      ADMINER_DEFAULT_DB_HOST: $DB_HOST
+      ADMINER_DEFAULT_DB_NAME: $DB_NAME
+    depends_on:
+      - mysql
+    labels:
+    - "traefik.http.routers.${PROJECT_NAME}_adminer.rule=Host(`adminer.${PROJECT_BASE_URL}`)"
+
+  # mailhog Service
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: "${PROJECT_NAME}_mailhog"
+    restart: unless-stopped
+    labels:
+      - "traefik.http.services.${PROJECT_NAME}_mailhog.loadbalancer.server.port\
+        =8025"
+      - "traefik.http.routers.${PROJECT_NAME}_mailhog.rule=Host(`mailhog.${PROJ\
+        ECT_BASE_URL}`)"
+
+  # traefik Service
+  traefik:
+    image: traefik:latest
+    container_name: "${PROJECT_NAME}_traefik"
+    restart: unless-stopped
+    command: --api.insecure=true --providers.docker
+    ports:
+      - '80:80'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.http.services.${PROJECT_NAME}_traefik.loadbalancer.server.port\
+        =8080"
+      - "traefik.http.routers.${PROJECT_NAME}_traefik.rule=Host(`traefik.${PROJ\
+        ECT_BASE_URL}`)"
+
+  # portainer Service
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: "${PROJECT_NAME}_portainer"
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.Sites/portainer/data:/data
+    labels:
+      - "traefik.http.services.${PROJECT_NAME}_portainer.loadbalancer.server.po\
+        rt=9000"
+      - "traefik.http.routers.${PROJECT_NAME}_portainer.rule=Host(`portainer.${\
+        PROJECT_BASE_URL}`)"
+
