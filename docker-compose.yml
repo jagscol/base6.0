@@ -45,6 +45,9 @@ services:
       MYSQL_PASSWORD: $DB_PASSWORD
     volumes:
       - ~/.Sites/${PROJECT_NAME}/mysql:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
 
   # phpmyadmin Service
   pma:
